@@ -1,0 +1,18 @@
+{"type":"permission-mode","sessionId":"aaaa-bbbb","timestamp":"2026-01-15T10:00:00Z"}
+{"type":"user","message":{"role":"user","content":"fix the muffin baking bug"},"uuid":"u1","sessionId":"aaaa-bbbb","timestamp":"2026-01-15T10:00:01Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'll look at the muffin baking code to find the bug."}]},"uuid":"a1","sessionId":"aaaa-bbbb","timestamp":"2026-01-15T10:00:05Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu1","name":"Read","input":{"file_path":"/src/oven/muffin_baker.cpp"}}]},"uuid":"a2","sessionId":"aaaa-bbbb","timestamp":"2026-01-15T10:00:10Z"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":[{"type":"text","text":"void MuffinBaker::flush() {\n  // empty oven\n}"}]}]},"uuid":"u2","sessionId":"aaaa-bbbb","timestamp":"2026-01-15T10:00:11Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Found the issue in the flush method. The temperature check is missing."}]},"uuid":"a3","sessionId":"aaaa-bbbb","timestamp":"2026-01-15T10:00:20Z"}
+{"type":"user","message":{"role":"user","content":"can you also check the cupcake recipe while you're at it"},"uuid":"u3","sessionId":"aaaa-bbbb","timestamp":"2026-01-15T10:01:00Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Sure, I'll check the cupcake recipe as well."}]},"uuid":"a4","sessionId":"aaaa-bbbb","timestamp":"2026-01-15T10:01:05Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu2","name":"Bash","input":{"command":"rg 'recipe.*muffin' /src/"}}]},"uuid":"a5","sessionId":"aaaa-bbbb","timestamp":"2026-01-15T10:01:10Z"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu2","content":[{"type":"text","text":"/src/recipes/cupcake_book.cpp:  load_muffin_recipe(path);"}]}]},"uuid":"u4","sessionId":"aaaa-bbbb","timestamp":"2026-01-15T10:01:11Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"The cupcake recipe looks fine. The cupcake_book correctly calls load_muffin_recipe."}]},"uuid":"a6","sessionId":"aaaa-bbbb","timestamp":"2026-01-15T10:01:20Z"}
+{"type":"user","message":{"role":"user","content":"great, now write the fix for the baking bug"},"uuid":"u5","sessionId":"aaaa-bbbb","timestamp":"2026-01-15T10:02:00Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'll add the temperature check to the flush method."}]},"uuid":"a7","sessionId":"aaaa-bbbb","timestamp":"2026-01-15T10:02:05Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu3","name":"Edit","input":{"file_path":"/src/oven/muffin_baker.cpp","old_string":"void MuffinBaker::flush() {","new_string":"void MuffinBaker::flush() {\n  if (oven_.empty()) return;"}}]},"uuid":"a8","sessionId":"aaaa-bbbb","timestamp":"2026-01-15T10:02:10Z"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu3","content":[{"type":"text","text":"Edit applied successfully."}]}]},"uuid":"u6","sessionId":"aaaa-bbbb","timestamp":"2026-01-15T10:02:11Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Fixed. The muffin baking bug was caused by flushing an empty oven."}]},"uuid":"a9","sessionId":"aaaa-bbbb","timestamp":"2026-01-15T10:02:20Z"}
+{"type":"user","message":{"role":"user","content":"thanks, looks good"},"uuid":"u7","sessionId":"aaaa-bbbb","timestamp":"2026-01-15T10:03:00Z"}
+{"type":"last-prompt","lastPrompt":"thanks, looks good","sessionId":"aaaa-bbbb","timestamp":"2026-01-15T10:03:00Z"}

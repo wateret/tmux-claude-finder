@@ -1,0 +1,4 @@
+{"type":"permission-mode","sessionId":"eeee-ffff","timestamp":"2026-01-15T16:00:00Z"}
+{"parentUuid":"p1","isSidechain":false,"attachment":{"type":"mcp_instructions_delta","addedNames":["plugin:zebra-tool:zebra-tool"],"addedBlocks":["## plugin:zebra-tool:zebra-tool\nZebra documentation server."]},"sessionId":"eeee-ffff","timestamp":"2026-01-15T16:00:01Z"}
+{"type":"user","message":{"role":"user","content":"unrelated user message about apples"},"uuid":"u1","sessionId":"eeee-ffff","timestamp":"2026-01-15T16:00:02Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Sure, talking about apples."}]},"uuid":"a1","sessionId":"eeee-ffff","timestamp":"2026-01-15T16:00:05Z"}
