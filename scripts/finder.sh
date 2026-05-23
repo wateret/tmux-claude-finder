@@ -7,10 +7,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 for cmd in rg fzf jq; do
-	if ! command -v "$cmd" &>/dev/null; then
-		tmux display-message "tmux-claude-finder: '$cmd' not found. Install it first."
-		exit 1
-	fi
+    if ! command -v "$cmd" &>/dev/null; then
+        tmux display-message "tmux-claude-finder: '$cmd' not found. Install it first."
+        exit 1
+    fi
 done
 
 DISCOVER_FILE=$(mktemp)
@@ -23,25 +23,25 @@ SEARCH_CMD="$SCRIPT_DIR/search.sh"
 "$SCRIPT_DIR/discover.sh" >"$DISCOVER_FILE"
 
 selected=$(
-	"$SEARCH_CMD" "" "$DISCOVER_FILE" | \
-	fzf --ansi \
-		--prompt="Search sessions> " \
-		--bind "change:reload:$SEARCH_CMD {q} $DISCOVER_FILE" \
-		--preview-window=down:10:wrap \
-		--preview="$SCRIPT_DIR/preview.sh {1} {q} $DISCOVER_FILE" \
-		--layout=reverse \
-	|| true
+    "$SEARCH_CMD" "" "$DISCOVER_FILE" | \
+    fzf --ansi \
+        --prompt="Search sessions> " \
+        --bind "change:reload:$SEARCH_CMD {q} $DISCOVER_FILE" \
+        --preview-window=down:10:wrap \
+        --preview="$SCRIPT_DIR/preview.sh {1} {q} $DISCOVER_FILE" \
+        --layout=reverse \
+    || true
 )
 
 if [ -z "$selected" ]; then
-	exit 0
+    exit 0
 fi
 
 # Extract pane target (first 12 chars, trimmed)
 pane_target=$(echo "$selected" | cut -c1-12 | xargs)
 
 if [ -n "$pane_target" ]; then
-	tmux switch-client -t "$pane_target" 2>/dev/null || \
-		tmux select-pane -t "$pane_target" 2>/dev/null || \
-		tmux display-message "Cannot switch to pane: $pane_target"
+    tmux switch-client -t "$pane_target" 2>/dev/null || \
+        tmux select-pane -t "$pane_target" 2>/dev/null || \
+        tmux display-message "Cannot switch to pane: $pane_target"
 fi

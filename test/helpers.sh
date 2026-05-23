@@ -8,10 +8,10 @@ pass() { _PASS=$((_PASS + 1)); echo "  PASS: $1"; }
 fail() { _FAIL=$((_FAIL + 1)); echo "  FAIL: $1"; }
 
 summary() {
-	echo ""
-	echo "Results: $_PASS passed, $_FAIL failed"
-	[ "$_FAIL" -gt 0 ] && return 1
-	return 0
+    echo ""
+    echo "Results: $_PASS passed, $_FAIL failed"
+    [ "$_FAIL" -gt 0 ] && return 1
+    return 0
 }
 
 # Paths

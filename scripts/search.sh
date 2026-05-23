@@ -13,31 +13,31 @@ DISCOVER_FILE="${2:-}"
 SEARCH_FAST_LIMIT="${SEARCH_FAST_LIMIT:-50}"
 
 if [ -z "$DISCOVER_FILE" ] || [ ! -f "$DISCOVER_FILE" ]; then
-	exit 0
+    exit 0
 fi
 
 if [ -z "$QUERY" ]; then
-	while IFS=$'\t' read -r pane session_id cwd jsonl_path sstatus session_name ptitle; do
-		[ -z "$pane" ] && continue
-		local_cwd="${cwd##*/}"
-		[ -z "$local_cwd" ] && local_cwd="$cwd"
-		clean_title=$(printf '%s' "$ptitle" | sed 's/^[^a-zA-Z0-9]* *//')
-		printf '%-12s %-9s %-16s [%-4s] %s\n' "$pane" "${session_id:0:8}" "$local_cwd" "$sstatus" "$clean_title"
-	done <"$DISCOVER_FILE"
-	exit 0
+    while IFS=$'\t' read -r pane session_id cwd jsonl_path sstatus session_name ptitle; do
+        [ -z "$pane" ] && continue
+        local_cwd="${cwd##*/}"
+        [ -z "$local_cwd" ] && local_cwd="$cwd"
+        clean_title=$(printf '%s' "$ptitle" | sed 's/^[^a-zA-Z0-9]* *//')
+        printf '%-12s %-9s %-16s [%-4s] %s\n' "$pane" "${session_id:0:8}" "$local_cwd" "$sstatus" "$clean_title"
+    done <"$DISCOVER_FILE"
+    exit 0
 fi
 
 declare -a JSONL_FILES=()
 
 while IFS=$'\t' read -r pane session_id cwd jsonl_path sstatus session_name ptitle; do
-	[ -z "$pane" ] && continue
-	if [ -f "$jsonl_path" ]; then
-		JSONL_FILES+=("$jsonl_path")
-	fi
+    [ -z "$pane" ] && continue
+    if [ -f "$jsonl_path" ]; then
+        JSONL_FILES+=("$jsonl_path")
+    fi
 done <"$DISCOVER_FILE"
 
 if [ ${#JSONL_FILES[@]} -eq 0 ]; then
-	exit 0
+    exit 0
 fi
 
 # Per-session worker. Reads from a single jsonl, writes one display line
@@ -46,50 +46,50 @@ fi
 # A leading sequence number lets us re-sort xargs' interleaved output back
 # to the original updatedAt-descending order.
 process_session() {
-	local seq pane sid cwd_short match_file
-	IFS=$'\t' read -r seq pane sid cwd_short match_file <<<"$1"
+    local seq pane sid cwd_short match_file
+    IFS=$'\t' read -r seq pane sid cwd_short match_file <<<"$1"
 
-	local jq_extract='
-		def extract_text:
-			if (.message | type) == "string" then .message
-			elif (.message.content | type) == "string" then .message.content
-			elif (.message.content | type) == "array" then
-				[.message.content[] |
-					if .type == "text" then .text
-					elif .type == "tool_use" then
-						(.input | values | map(tostring) | join(" "))
-					elif .type == "tool_result" then
-						(.content // [] | map(select(.type == "text") | .text) | join(" "))
-					else ""
-					end
-				] | map(select(length > 0)) | join(" ")
-			else ""
-			end;
-		extract_text | gsub("\\n"; " ") | gsub("\\\\n"; " ") |
-		[match("(.{0,40}" + $q + ".{0,40})"; "ig")] | .[0].string // ""
-	'
+    local jq_extract='
+        def extract_text:
+            if (.message | type) == "string" then .message
+            elif (.message.content | type) == "string" then .message.content
+            elif (.message.content | type) == "array" then
+                [.message.content[] |
+                    if .type == "text" then .text
+                    elif .type == "tool_use" then
+                        (.input | values | map(tostring) | join(" "))
+                    elif .type == "tool_result" then
+                        (.content // [] | map(select(.type == "text") | .text) | join(" "))
+                    else ""
+                    end
+                ] | map(select(length > 0)) | join(" ")
+            else ""
+            end;
+        extract_text | gsub("\\n"; " ") | gsub("\\\\n"; " ") |
+        [match("(.{0,40}" + $q + ".{0,40})"; "ig")] | .[0].string // ""
+    '
 
-	local text
-	text=$(rg -i --no-filename '"type"\s*:\s*"(user|assistant)"' "$match_file" 2>/dev/null | \
-		rg -i -- "$QUERY" 2>/dev/null | \
-		tail -"$SEARCH_FAST_LIMIT" | \
-		jq -r --arg q "$QUERY" "$jq_extract" 2>/dev/null | rg -v '^$' | tail -1 || true)
+    local text
+    text=$(rg -i --no-filename '"type"\s*:\s*"(user|assistant)"' "$match_file" 2>/dev/null | \
+        rg -i -- "$QUERY" 2>/dev/null | \
+        tail -"$SEARCH_FAST_LIMIT" | \
+        jq -r --arg q "$QUERY" "$jq_extract" 2>/dev/null | rg -v '^$' | tail -1 || true)
 
-	if [ -z "$text" ]; then
-		text=$(rg -i --no-filename '"type"\s*:\s*"(user|assistant)"' "$match_file" 2>/dev/null | \
-			rg -i -- "$QUERY" 2>/dev/null | \
-			jq -r --arg q "$QUERY" "$jq_extract" 2>/dev/null | rg -v '^$' | tail -1 || true)
-	fi
+    if [ -z "$text" ]; then
+        text=$(rg -i --no-filename '"type"\s*:\s*"(user|assistant)"' "$match_file" 2>/dev/null | \
+            rg -i -- "$QUERY" 2>/dev/null | \
+            jq -r --arg q "$QUERY" "$jq_extract" 2>/dev/null | rg -v '^$' | tail -1 || true)
+    fi
 
-	[ -z "$text" ] && return 0
+    [ -z "$text" ] && return 0
 
-	text=$(printf '%s' "$text" | sed 's/\\t/ /g; s/  */ /g')
-	if [ ${#text} -gt 80 ]; then
-		text="${text:0:77}..."
-	fi
+    text=$(printf '%s' "$text" | sed 's/\\t/ /g; s/  */ /g')
+    if [ ${#text} -gt 80 ]; then
+        text="${text:0:77}..."
+    fi
 
-	# Emit "<seq>\t<formatted line>" so the caller can sort by seq.
-	printf '%s\t%-12s %-9s %-16s %s\n' "$seq" "$pane" "$sid" "$cwd_short" "$text"
+    # Emit "<seq>\t<formatted line>" so the caller can sort by seq.
+    printf '%s\t%-12s %-9s %-16s %s\n' "$seq" "$pane" "$sid" "$cwd_short" "$text"
 }
 export -f process_session
 export QUERY SEARCH_FAST_LIMIT
@@ -106,22 +106,22 @@ rg -i -l -- "$QUERY" "${JSONL_FILES[@]}" >"$MATCHED_FILE" 2>/dev/null || true
 # the parallel-job TSV. Dedupes by pane, preserves DISCOVER_FILE order, and
 # stamps a zero-padded seq so a lexicographic sort restores order later.
 tsv=$(awk -F'\t' '
-	FNR == 1 { fileno++ }
-	fileno == 1 { matched[$0] = 1; next }
-	fileno == 2 {
-		pane = $1; sid = $2; cwd = $3; jsonl_path = $4
-		if (pane == "" || jsonl_path == "" || !(jsonl_path in matched)) next
-		if (pane in seen_pane) next
-		seen_pane[pane] = 1
+    FNR == 1 { fileno++ }
+    fileno == 1 { matched[$0] = 1; next }
+    fileno == 2 {
+        pane = $1; sid = $2; cwd = $3; jsonl_path = $4
+        if (pane == "" || jsonl_path == "" || !(jsonl_path in matched)) next
+        if (pane in seen_pane) next
+        seen_pane[pane] = 1
 
-		short_sid = substr(sid, 1, 8)
-		n = split(cwd, parts, "/")
-		short_cwd = parts[n]
-		if (short_cwd == "") short_cwd = cwd
+        short_sid = substr(sid, 1, 8)
+        n = split(cwd, parts, "/")
+        short_cwd = parts[n]
+        if (short_cwd == "") short_cwd = cwd
 
-		seq++
-		printf "%05d\t%s\t%s\t%s\t%s\n", seq, pane, short_sid, short_cwd, jsonl_path
-	}
+        seq++
+        printf "%05d\t%s\t%s\t%s\t%s\n", seq, pane, short_sid, short_cwd, jsonl_path
+    }
 ' "$MATCHED_FILE" "$DISCOVER_FILE")
 
 [ -z "$tsv" ] && exit 0
@@ -131,4 +131,4 @@ tsv=$(awk -F'\t' '
 # Use NUL-delimited input via -0 (portable across BSD and GNU xargs;
 # -d is GNU-only). Then sort by seq to restore updatedAt order.
 printf '%s\n' "$tsv" | tr '\n' '\0' | xargs -0 -I{} -P 0 bash -c 'process_session "$@"' _ {} | \
-	sort -t$'\t' -k1,1n | cut -f2-
+    sort -t$'\t' -k1,1n | cut -f2-
