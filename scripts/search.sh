@@ -27,15 +27,11 @@ if [ -z "$QUERY" ]; then
 	exit 0
 fi
 
-declare -A PANE_MAP CWD_MAP SID_MAP
-JSONL_FILES=()
+declare -a JSONL_FILES=()
 
 while IFS=$'\t' read -r pane session_id cwd jsonl_path sstatus session_name ptitle; do
 	[ -z "$pane" ] && continue
 	if [ -f "$jsonl_path" ]; then
-		PANE_MAP["$jsonl_path"]="$pane"
-		SID_MAP["$jsonl_path"]="${session_id:0:8}"
-		CWD_MAP["$jsonl_path"]="${cwd##*/}"
 		JSONL_FILES+=("$jsonl_path")
 	fi
 done <"$DISCOVER_FILE"
@@ -100,34 +96,39 @@ export QUERY SEARCH_FAST_LIMIT
 
 # Build the set of files that match $QUERY. ripgrep's --sort=none (default)
 # is multi-threaded with non-deterministic ordering, so we use rg -l only as
-# a membership filter and walk JSONL_FILES ourselves to preserve the
-# updatedAt-descending order coming from discover.sh.
-matching_files=$(rg -i -l -- "$QUERY" "${JSONL_FILES[@]}" 2>/dev/null || true)
-declare -A MATCHED
-while IFS= read -r f; do
-	[ -n "$f" ] && MATCHED["$f"]=1
-done <<<"$matching_files"
+# a membership filter; the awk below walks DISCOVER_FILE in order to preserve
+# the updatedAt-descending sequence coming from discover.sh.
+MATCHED_FILE=$(mktemp)
+trap 'rm -f "$MATCHED_FILE"' EXIT INT TERM
+rg -i -l -- "$QUERY" "${JSONL_FILES[@]}" >"$MATCHED_FILE" 2>/dev/null || true
 
-# Build TSV in JSONL_FILES order: <seq>\t<pane>\t<sid>\t<cwd>\t<jsonl_path>
-seq=0
-tsv=""
-declare -A SEEN_PANE
-for path in "${JSONL_FILES[@]}"; do
-	[ -z "${MATCHED[$path]:-}" ] && continue
-	pane="${PANE_MAP[$path]:-}"
-	[ -z "$pane" ] && continue
-	[ -n "${SEEN_PANE[$pane]:-}" ] && continue
-	SEEN_PANE["$pane"]=1
-	seq=$((seq + 1))
-	# Pad seq so lexicographic sort works without -n (faster, smaller binary).
-	tsv+=$(printf '%05d\t%s\t%s\t%s\t%s\n' "$seq" "$pane" "${SID_MAP[$path]:-}" "${CWD_MAP[$path]:-}" "$path")
-	tsv+=$'\n'
-done
+# Join MATCHED_FILE (paths matching $QUERY) with DISCOVER_FILE to produce
+# the parallel-job TSV. Dedupes by pane, preserves DISCOVER_FILE order, and
+# stamps a zero-padded seq so a lexicographic sort restores order later.
+tsv=$(awk -F'\t' '
+	FNR == 1 { fileno++ }
+	fileno == 1 { matched[$0] = 1; next }
+	fileno == 2 {
+		pane = $1; sid = $2; cwd = $3; jsonl_path = $4
+		if (pane == "" || jsonl_path == "" || !(jsonl_path in matched)) next
+		if (pane in seen_pane) next
+		seen_pane[pane] = 1
+
+		short_sid = substr(sid, 1, 8)
+		n = split(cwd, parts, "/")
+		short_cwd = parts[n]
+		if (short_cwd == "") short_cwd = cwd
+
+		seq++
+		printf "%05d\t%s\t%s\t%s\t%s\n", seq, pane, short_sid, short_cwd, jsonl_path
+	}
+' "$MATCHED_FILE" "$DISCOVER_FILE")
 
 [ -z "$tsv" ] && exit 0
 
 # Run process_session in parallel; -P 0 lets xargs use as many workers as
 # there are tasks (xargs caps it at the number of input items anyway).
-# Then sort by sequence number to restore updatedAt order, drop the seq column.
-printf '%s\n' "$tsv" | xargs -d '\n' -I{} -P 0 bash -c 'process_session "$@"' _ {} | \
+# Use NUL-delimited input via -0 (portable across BSD and GNU xargs;
+# -d is GNU-only). Then sort by seq to restore updatedAt order.
+printf '%s\n' "$tsv" | tr '\n' '\0' | xargs -0 -I{} -P 0 bash -c 'process_session "$@"' _ {} | \
 	sort -t$'\t' -k1,1n | cut -f2-

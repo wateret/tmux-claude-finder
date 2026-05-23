@@ -42,17 +42,35 @@ main() {
 		exit 0
 	fi
 
-	# BFS through process tree to find claude PIDs per pane
-	local MATCHES
-	MATCHES=$(awk '
-		NR == FNR {
+	# Single-pass awk: read SESSION_MAP, PANE_FILE, PS_FILE, then BFS through
+	# the process tree per pane to find claude PIDs and join with session metadata.
+	# Output is keyed by updatedAt so the trailing sort can order it.
+	awk -v projects_dir="$CLAUDE_PROJECTS_DIR" '
+		# Track which input file we are on. FNR resets to 1 at each new file,
+		# so this fires once per file and must run before the per-file blocks.
+		FNR == 1 { fileno++ }
+
+		# File 1: SESSION_MAP (pid \t sessionId \t cwd \t status \t name \t updatedAt)
+		fileno == 1 {
+			split($0, s, "\t")
+			spid = s[1]
+			sid_by_pid[spid] = s[2]
+			cwd_by_pid[spid] = s[3]
+			status_by_pid[spid] = s[4]
+			name_by_pid[spid] = s[5]
+			updated_by_pid[spid] = s[6]
+			next
+		}
+		# File 2: PANE_FILE (target|pane_pid|cwd|title)
+		fileno == 2 {
 			split($0, p, "|")
 			pane_target[p[2]] = p[1]
 			pane_title[p[2]] = p[4]
 			pane_list[++pane_count] = p[2]
 			next
 		}
-		{
+		# File 3: PS_FILE (pid ppid args)
+		fileno == 3 {
 			pid = $1+0; ppid = $2+0
 			line = $0
 			sub(/^[ \t]*[0-9]+[ \t]+[0-9]+[ \t]*/, "", line)
@@ -65,85 +83,57 @@ main() {
 			for (i = 1; i <= pane_count; i++) {
 				root = pane_list[i]+0
 				target = pane_target[pane_list[i]]
+				ptitle = pane_title[pane_list[i]]
 
+				cpid = 0
 				if (root in proc_tool && proc_tool[root] != "") {
-					printf "%s\t%d\t%s\n", target, root, pane_title[pane_list[i]]
-					continue
-				}
-
-				delete queue
-				qs = 1; qe = 0
-				if (root in child_list) {
-					nc = split(child_list[root], kids, SUBSEP)
-					for (j = 1; j <= nc; j++) {
-						k = kids[j]+0
-						if (k > 0) { queue[++qe] = k }
-					}
-				}
-
-				found = 0
-				while (qs <= qe && !found) {
-					cur = queue[qs++]+0
-					if (cur in proc_tool && proc_tool[cur] != "") {
-						printf "%s\t%d\t%s\n", target, cur, pane_title[pane_list[i]]
-						found = 1
-					}
-					if (cur in child_list) {
-						nc = split(child_list[cur], kids, SUBSEP)
+					cpid = root
+				} else {
+					delete queue
+					qs = 1; qe = 0
+					if (root in child_list) {
+						nc = split(child_list[root], kids, SUBSEP)
 						for (j = 1; j <= nc; j++) {
 							k = kids[j]+0
-							if (k > 0) { queue[++qe] = k }
+							if (k > 0) queue[++qe] = k
+						}
+					}
+					while (qs <= qe && cpid == 0) {
+						cur = queue[qs++]+0
+						if (cur in proc_tool && proc_tool[cur] != "") {
+							cpid = cur
+						}
+						if (cur in child_list) {
+							nc = split(child_list[cur], kids, SUBSEP)
+							for (j = 1; j <= nc; j++) {
+								k = kids[j]+0
+								if (k > 0) queue[++qe] = k
+							}
 						}
 					}
 				}
+
+				if (cpid == 0) continue
+				cpids = cpid ""
+				if (!(cpids in sid_by_pid) || sid_by_pid[cpids] == "") continue
+				if (target in seen_target) continue
+				seen_target[target] = 1
+
+				sid = sid_by_pid[cpids]
+				cwd = cwd_by_pid[cpids]
+				sstatus = status_by_pid[cpids]
+				sname = name_by_pid[cpids]
+				supdated = updated_by_pid[cpids]
+
+				project_folder = cwd
+				gsub(/\//, "-", project_folder)
+				jsonl_path = projects_dir "/" project_folder "/" sid ".jsonl"
+
+				printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", \
+					supdated, target, sid, cwd, jsonl_path, sstatus, sname, ptitle
 			}
 		}
-	' "$PANE_FILE" "$PS_FILE")
-
-	if [ -z "$MATCHES" ]; then
-		exit 0
-	fi
-
-	# Join pane→pid matches with session metadata
-	# SESSION_MAP is: pid \t sessionId \t cwd \t status \t name \t updatedAt
-	declare -A SID_BY_PID CWD_BY_PID STATUS_BY_PID NAME_BY_PID UPDATED_BY_PID
-	while IFS=$'\t' read -r spid sid scwd sstatus sname supdated; do
-		SID_BY_PID["$spid"]="$sid"
-		CWD_BY_PID["$spid"]="$scwd"
-		STATUS_BY_PID["$spid"]="$sstatus"
-		NAME_BY_PID["$spid"]="$sname"
-		UPDATED_BY_PID["$spid"]="$supdated"
-	done <"$SESSION_MAP"
-
-	local resolved_targets=""
-	local RESULTS=""
-	while IFS=$'\t' read -r target cpid ptitle; do
-		[ -z "$target" ] && continue
-
-		case "$resolved_targets" in
-		*"|${target}|"*) continue ;;
-		esac
-
-		local session_id="${SID_BY_PID[$cpid]:-}"
-		if [ -z "$session_id" ]; then
-			continue
-		fi
-
-		local cwd="${CWD_BY_PID[$cpid]:-}"
-		local sstatus="${STATUS_BY_PID[$cpid]:-unknown}"
-		local sname="${NAME_BY_PID[$cpid]:-}"
-		local supdated="${UPDATED_BY_PID[$cpid]:-0}"
-
-		local project_folder
-		project_folder=$(echo "$cwd" | tr '/' '-')
-		local jsonl_path="$CLAUDE_PROJECTS_DIR/${project_folder}/${session_id}.jsonl"
-
-		RESULTS="${RESULTS}${supdated}\t${target}\t${session_id}\t${cwd}\t${jsonl_path}\t${sstatus}\t${sname}\t${ptitle}\n"
-		resolved_targets="${resolved_targets}|${target}|"
-	done <<<"$MATCHES"
-
-	# Sort by updatedAt descending, then strip the sort key
-	printf '%b' "$RESULTS" | sort -t$'\t' -k1 -rn | cut -f2-
+	' "$SESSION_MAP" "$PANE_FILE" "$PS_FILE" | sort -t$'\t' -k1 -rn | cut -f2-
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
