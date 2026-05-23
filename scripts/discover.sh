@@ -5,7 +5,9 @@
 set -euo pipefail
 
 CLAUDE_SESSIONS_DIR="${CLAUDE_SESSIONS_DIR:-${HOME}/.claude/sessions}"
+[ -d "$CLAUDE_SESSIONS_DIR" ] || CLAUDE_SESSIONS_DIR="${HOME}/.claude/sessions"
 CLAUDE_PROJECTS_DIR="${CLAUDE_PROJECTS_DIR:-${HOME}/.claude/projects}"
+[ -d "$CLAUDE_PROJECTS_DIR" ] || CLAUDE_PROJECTS_DIR="${HOME}/.claude/projects"
 
 PS_FILE=$(mktemp)
 PANE_FILE=$(mktemp)
