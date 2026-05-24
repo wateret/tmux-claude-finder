@@ -16,9 +16,11 @@ Search across live Claude Code sessions in tmux and jump to the matching pane.
 - `jq`
 - Claude Code
 
-## Install via TPM
+## Install
 
-Add to `~/.tmux.conf`:
+**Via [TPM](https://github.com/tmux-plugins/tpm):**
+
+Add to `tmux.conf`:
 
 ```tmux
 set -g @plugin 'wateret/tmux-claude-finder'
@@ -26,16 +28,16 @@ set -g @plugin 'wateret/tmux-claude-finder'
 
 Then press `prefix + I` to install.
 
-## Manual install
+**Manual:**
 
 ```bash
-git clone https://github.com/wateret/tmux-claude-finder ~/.tmux/plugins/tmux-claude-finder
+git clone https://github.com/wateret/tmux-claude-finder ~/.config/tmux/plugins/tmux-claude-finder
 ```
 
-Add to `~/.tmux.conf`:
+Add to `tmux.conf`:
 
 ```tmux
-run-shell ~/.tmux/plugins/tmux-claude-finder/tmux-claude-finder.tmux
+run-shell ~/.config/tmux/plugins/tmux-claude-finder/tmux-claude-finder.tmux
 ```
 
 ## Configuration
