@@ -1,6 +1,10 @@
 # tmux-claude-finder
 
-Search across live Claude Code sessions in tmux and jump to the matching pane.
+Search across live interactive Claude Code sessions in tmux and jump to the matching pane.
+
+![screenshot](screenshot.png)
+
+> **Note:** Background/headless sessions are excluded; use `claude agents` for those.
 
 ## How it works
 
@@ -14,7 +18,6 @@ Search across live Claude Code sessions in tmux and jump to the matching pane.
 - [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`)
 - [fzf](https://github.com/junegunn/fzf)
 - `jq`
-- Claude Code
 
 ## Install
 
