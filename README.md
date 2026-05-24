@@ -4,7 +4,7 @@ Search across live interactive Claude Code sessions in tmux and jump to the matc
 
 ![screenshot](screenshot.png)
 
-> **Note:** Background/headless sessions are excluded; use `claude agents` for those.
+> **Note:** Background/headless sessions are excluded; use `claude agents` for background sessions.
 
 ## How it works
 
