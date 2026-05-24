@@ -35,7 +35,15 @@ if [ -z "$QUERY" ]; then
         [ -z "$local_cwd" ] && local_cwd="$cwd"
         [ ${#local_cwd} -gt 16 ] && local_cwd="${local_cwd:0:15}…"
         clean_title=$(printf '%s' "$ptitle" | sed 's/^[^a-zA-Z0-9]* *//')
-        printf '%-12s %-9s %-16s [%-4s] %s\n' "$pane" "${session_id:0:8}" "$local_cwd" "$sstatus" "$clean_title"
+        s="${sstatus:0:4}"
+        case "$sstatus" in
+            busy)    status_col=$(printf '\033[35m[%-4s]\033[0m' "$s") ;;
+            idle)    status_col=$(printf '\033[90m[%-4s]\033[0m' "$s") ;;
+            shell)   status_col=$(printf '\033[34m[%-4s]\033[0m' "$s") ;;
+            waiting) status_col=$(printf '\033[33m[%-4s]\033[0m' "$s") ;;
+            *)       status_col=$(printf '[%-4s]' "$s") ;;
+        esac
+        printf '%-12s %-9s %-16s %s %s\n' "$pane" "${session_id:0:8}" "$local_cwd" "$status_col" "$clean_title"
     done <"$DISCOVER_FILE"
     exit 0
 fi
