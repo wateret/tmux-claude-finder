@@ -13,6 +13,17 @@ for cmd in rg fzf jq; do
     fi
 done
 
+POPUP_COLS=$(tput cols 2>/dev/null || echo 120)
+export POPUP_COLS
+
+POPUP_LINES="${LINES:-$(tput lines 2>/dev/null || echo 24)}"
+PREVIEW_LINES=$(( POPUP_LINES * 50 / 100 ))
+[ "$PREVIEW_LINES" -lt 3 ]  && PREVIEW_LINES=3
+[ "$PREVIEW_LINES" -gt 10 ] && PREVIEW_LINES=10
+# Don't let the cap push preview above 50% of the actual popup height
+[ "$PREVIEW_LINES" -gt $(( POPUP_LINES / 2 )) ] && PREVIEW_LINES=$(( POPUP_LINES / 2 ))
+[ "$PREVIEW_LINES" -lt 3 ]  && PREVIEW_LINES=3
+
 DISCOVER_FILE=$(mktemp)
 trap 'rm -f "$DISCOVER_FILE"' EXIT INT TERM
 
@@ -27,7 +38,7 @@ selected=$(
     fzf --ansi \
         --prompt="Search sessions> " \
         --bind "change:reload:$SEARCH_CMD {q} $DISCOVER_FILE" \
-        --preview-window=down:10:wrap \
+        --preview-window="down:${PREVIEW_LINES}:wrap" \
         --preview="$SCRIPT_DIR/preview.sh {1} {q} $DISCOVER_FILE" \
         --layout=reverse \
     || true

@@ -12,6 +12,18 @@ DISCOVER_FILE="${2:-}"
 # If they all fail to yield a snippet, we fall back to scanning all matches.
 SEARCH_FAST_LIMIT="${SEARCH_FAST_LIMIT:-50}"
 
+# Column layout: pane(12) + space + sid(9) + space + cwd(16) + space = 40 fixed chars.
+# TEXT_MAX is the remaining width available for the match snippet.
+# CONTEXT_CHARS is how many chars to show on each side of the matched query.
+POPUP_COLS="${POPUP_COLS:-$(tput cols 2>/dev/null || echo 120)}"
+TEXT_MAX=$(( POPUP_COLS - 40 ))
+if [ "${#QUERY}" -ge "$TEXT_MAX" ]; then
+    # Query fills or exceeds available space: show just the query, no context, no truncation
+    CONTEXT_CHARS=0
+else
+    CONTEXT_CHARS=$(( (TEXT_MAX - ${#QUERY}) / 2 ))
+fi
+
 if [ -z "$DISCOVER_FILE" ] || [ ! -f "$DISCOVER_FILE" ]; then
     exit 0
 fi
@@ -21,6 +33,7 @@ if [ -z "$QUERY" ]; then
         [ -z "$pane" ] && continue
         local_cwd="${cwd##*/}"
         [ -z "$local_cwd" ] && local_cwd="$cwd"
+        [ ${#local_cwd} -gt 16 ] && local_cwd="${local_cwd:0:15}…"
         clean_title=$(printf '%s' "$ptitle" | sed 's/^[^a-zA-Z0-9]* *//')
         printf '%-12s %-9s %-16s [%-4s] %s\n' "$pane" "${session_id:0:8}" "$local_cwd" "$sstatus" "$clean_title"
     done <"$DISCOVER_FILE"
@@ -66,33 +79,33 @@ process_session() {
             else ""
             end;
         extract_text | gsub("\\n"; " ") | gsub("\\\\n"; " ") |
-        [match("(.{0,40}" + $q + ".{0,40})"; "ig")] | .[0].string // ""
+        [match("(.{0," + $ctx + "}" + $q + ".{0," + $ctx + "})"; "ig")] | .[0].string // ""
     '
 
     local text
     text=$(rg -i --no-filename '"type"\s*:\s*"(user|assistant)"' "$match_file" 2>/dev/null | \
         rg -i -- "$QUERY" 2>/dev/null | \
         tail -"$SEARCH_FAST_LIMIT" | \
-        jq -r --arg q "$QUERY" "$jq_extract" 2>/dev/null | rg -v '^$' | tail -1 || true)
+        jq -r --arg q "$QUERY" --arg ctx "$CONTEXT_CHARS" "$jq_extract" 2>/dev/null | rg -v '^$' | tail -1 || true)
 
     if [ -z "$text" ]; then
         text=$(rg -i --no-filename '"type"\s*:\s*"(user|assistant)"' "$match_file" 2>/dev/null | \
             rg -i -- "$QUERY" 2>/dev/null | \
-            jq -r --arg q "$QUERY" "$jq_extract" 2>/dev/null | rg -v '^$' | tail -1 || true)
+            jq -r --arg q "$QUERY" --arg ctx "$CONTEXT_CHARS" "$jq_extract" 2>/dev/null | rg -v '^$' | tail -1 || true)
     fi
 
     [ -z "$text" ] && return 0
 
     text=$(printf '%s' "$text" | sed 's/\\t/ /g; s/  */ /g')
-    if [ ${#text} -gt 80 ]; then
-        text="${text:0:77}..."
+    if [ "$CONTEXT_CHARS" -gt 0 ] && [ ${#text} -gt "$TEXT_MAX" ]; then
+        text="${text:0:$(( TEXT_MAX - 3 ))}..."
     fi
 
     # Emit "<seq>\t<formatted line>" so the caller can sort by seq.
     printf '%s\t%-12s %-9s %-16s %s\n' "$seq" "$pane" "$sid" "$cwd_short" "$text"
 }
 export -f process_session
-export QUERY SEARCH_FAST_LIMIT
+export QUERY SEARCH_FAST_LIMIT CONTEXT_CHARS TEXT_MAX
 
 # Build the set of files that match $QUERY. ripgrep's --sort=none (default)
 # is multi-threaded with non-deterministic ordering, so we use rg -l only as
@@ -118,6 +131,7 @@ tsv=$(awk -F'\t' '
         n = split(cwd, parts, "/")
         short_cwd = parts[n]
         if (short_cwd == "") short_cwd = cwd
+        if (length(short_cwd) > 16) short_cwd = substr(short_cwd, 1, 15) "…"
 
         seq++
         printf "%05d\t%s\t%s\t%s\t%s\n", seq, pane, short_sid, short_cwd, jsonl_path

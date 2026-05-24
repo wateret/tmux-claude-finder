@@ -7,6 +7,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 
 echo "Testing search.sh..."
 
+# Fix popup width so tests are independent of the terminal running them.
+export POPUP_COLS=200
+
 # Create discover TSV pointing to fixture JSONL files
 DISCOVER_TSV=$(mktemp)
 trap 'rm -f "$DISCOVER_TSV"' EXIT
@@ -148,6 +151,47 @@ if echo "$output" | rg -q "should be migrated"; then
     pass "fallback path recovers the most recent match when fast path is empty"
 else
     fail "fallback path recovers the most recent match when fast path is empty (got: $output)"
+fi
+
+# Tests: context chars scale with popup width.
+# Fixture sentence: "I'll invoke the timing-conventions skill since this is about timer usage patterns."
+# Right of query: " skill since this is about timer usage patterns." = 48 chars
+#
+# POPUP_COLS=200: CONTEXT_CHARS=(160-18)/2=71  → all 48 right chars fit → "patterns" visible
+# POPUP_COLS=80:  CONTEXT_CHARS=(40-18)/2=11   → " skill sinc" (11) → "skill" visible, "patterns" not
+# POPUP_COLS=50:  TEXT_MAX=10 < query(18) → CONTEXT_CHARS=0, no truncation → full query shown
+
+out_wide=$(POPUP_COLS=200 "$PROJECT_DIR/scripts/search.sh" "timing-conventions" "$SMALL_TSV")
+out_narrow=$(POPUP_COLS=80 "$PROJECT_DIR/scripts/search.sh" "timing-conventions" "$SMALL_TSV")
+out_tiny=$(POPUP_COLS=50 "$PROJECT_DIR/scripts/search.sh" "timing-conventions" "$SMALL_TSV")
+
+if echo "$out_wide" | rg -q "patterns"; then
+    pass "wide popup (200): 'patterns' visible — 48-char right context fits in CONTEXT_CHARS=71"
+else
+    fail "wide popup (200): 'patterns' not visible (got: $out_wide)"
+fi
+
+if echo "$out_narrow" | rg -q "skill"; then
+    pass "narrow popup (80): 'skill' visible — within 11-char right context"
+else
+    fail "narrow popup (80): 'skill' not visible (got: $out_narrow)"
+fi
+if ! echo "$out_narrow" | rg -q "patterns"; then
+    pass "narrow popup (80): 'patterns' not visible — beyond 11-char right context"
+else
+    fail "narrow popup (80): 'patterns' should not appear (got: $out_narrow)"
+fi
+
+# POPUP_COLS=50: TEXT_MAX(10) < query(18) → CONTEXT_CHARS=0, no truncation → full query visible
+if echo "$out_tiny" | rg -q "timing-conventions"; then
+    pass "tiny popup (50, TEXT_MAX < query): full query shown, no truncation"
+else
+    fail "tiny popup (50): query term missing (got: $out_tiny)"
+fi
+if ! echo "$out_tiny" | rg -q "patterns"; then
+    pass "tiny popup (50): no context shown beyond query"
+else
+    fail "tiny popup (50): 'patterns' should not appear (got: $out_tiny)"
 fi
 
 summary

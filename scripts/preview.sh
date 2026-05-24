@@ -26,6 +26,16 @@ if [ -z "$jsonl_path" ] || [ ! -f "$jsonl_path" ]; then
     exit 0
 fi
 
+# Fixed overhead per row: timestamp(11) + "  "(2) + "["(1) + type(4) + "]"(1) + "  "(2) = 21
+PREVIEW_COLS="${FZF_PREVIEW_COLUMNS:-${POPUP_COLS:-120}}"
+_PREVIEW_TEXT_MAX=$(( PREVIEW_COLS - 21 ))
+if [ "${#QUERY}" -ge "$_PREVIEW_TEXT_MAX" ]; then
+    # Query fills or exceeds available space: show just the query, no context
+    CONTEXT_CHARS=0
+else
+    CONTEXT_CHARS=$(( (_PREVIEW_TEXT_MAX - ${#QUERY}) / 2 ))
+fi
+
 if [ -z "$QUERY" ]; then
     # Show last prompt from this session
     last_prompt=$(tail -20 "$jsonl_path" | jq -r 'select(.type == "last-prompt") | .lastPrompt // empty' 2>/dev/null | tail -1)
@@ -60,8 +70,8 @@ result=$(rg -i --no-filename '"type"\s*:\s*"(user|assistant)"' "$jsonl_path" 2>/
 
         def short_type: if . == "assistant" then " ai " elif . == "user" then "user" else (.[0:4] + "    ")[0:4] end;
 
-        "\(.timestamp // "?" | local_time)  [\(.type // "?" | short_type | .[:4])]  \(extract_text | gsub("\\n"; " ") | gsub("\\\\n"; " ") | [match("(.{0,80}" + $q + ".{0,80})"; "ig")] | .[0].string // "")"
-    ' --arg q "$QUERY" 2>/dev/null | \
+        "\(.timestamp // "?" | local_time)  [\(.type // "?" | short_type | .[:4])]  \(extract_text | gsub("\\n"; " ") | gsub("\\\\n"; " ") | [match("(.{0," + $ctx + "}" + $q + ".{0," + $ctx + "})"; "ig")] | .[0].string // "")"
+    ' --arg q "$QUERY" --arg ctx "$CONTEXT_CHARS" 2>/dev/null | \
     grep -i --color=always -- "$QUERY" 2>/dev/null | tail -10 | tac || true)
 
 if [ -n "$result" ]; then
@@ -72,9 +82,9 @@ else
         jq -r --arg q "$QUERY" '
             def local_time: if . == null or . == "?" then "?" else (.[0:19] + "Z" | strptime("%Y-%m-%dT%H:%M:%SZ") | mktime | localtime | strftime("%m-%d %H:%M")) end;
             def short_type: if . == "assistant" then " ai " elif . == "user" then "user" else (.[0:4] + "    ")[0:4] end;
-            def snippet: tostring | [match("(.{0,60}" + $q + ".{0,60})"; "ig")] | .[0].string // "";
+            def snippet: tostring | [match("(.{0," + $ctx + "}" + $q + ".{0," + $ctx + "})"; "ig")] | .[0].string // "";
             "\(.timestamp // "?" | local_time)  [\(.type // "?" | short_type | .[:4])]  \(snippet | gsub("\\\\n"; " ") | gsub("\\\\t"; " "))"
-        ' 2>/dev/null | \
+        ' --arg ctx "$CONTEXT_CHARS" 2>/dev/null | \
         grep -i --color=always -- "$QUERY" 2>/dev/null | \
         tac | head -10 || echo "(no matches)"
 fi

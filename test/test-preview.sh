@@ -142,4 +142,55 @@ else
     fail "search list/preview snippets disagree (search: $search_out / preview top: $first_row)"
 fi
 
+# Tests: preview context chars scale with FZF_PREVIEW_COLUMNS.
+# Same fixture sentence: "I'll invoke the timing-conventions skill since this is about timer usage patterns."
+# Fixed overhead in preview row: timestamp(11) + "  ["(3) + type(4) + "]  "(3) = 21 chars
+# Right of query: " skill since this is about timer usage patterns." = 48 chars
+#
+# FZF_PREVIEW_COLUMNS=200: CONTEXT_CHARS=(200-21-18)/2=80 → "patterns" visible (48 chars right)
+# FZF_PREVIEW_COLUMNS=80:  CONTEXT_CHARS=(80-21-18)/2=20  → " skill since this is" → "since" visible, "patterns" not
+# FZF_PREVIEW_COLUMNS=35:  35-21=14 < query(18) → CONTEXT_CHARS=0 → just query, "skill" not shown
+
+SMALL_DISCOVER=$(mktemp)
+trap 'rm -f "$DISCOVER_TSV" "$SMALL_DISCOVER"' EXIT
+printf 'small:0.0\tgggg-hhhh\t/test/timers\t%s\tidle\t-\ttimer work\n' \
+    "$FIXTURES_DIR/projects/-test-project/gggg-hhhh.jsonl" >"$SMALL_DISCOVER"
+
+out_wide=$(FZF_PREVIEW_COLUMNS=200 "$PROJECT_DIR/scripts/preview.sh" "small:0.0" "timing-conventions" "$SMALL_DISCOVER")
+out_narrow=$(FZF_PREVIEW_COLUMNS=80 "$PROJECT_DIR/scripts/preview.sh" "small:0.0" "timing-conventions" "$SMALL_DISCOVER")
+out_tiny=$(FZF_PREVIEW_COLUMNS=35 "$PROJECT_DIR/scripts/preview.sh" "small:0.0" "timing-conventions" "$SMALL_DISCOVER")
+
+plain_wide=$(printf '%s' "$out_wide" | sed 's/\x1b\[[0-9;]*m//g')
+plain_narrow=$(printf '%s' "$out_narrow" | sed 's/\x1b\[[0-9;]*m//g')
+plain_tiny=$(printf '%s' "$out_tiny" | sed 's/\x1b\[[0-9;]*m//g')
+
+if echo "$plain_wide" | rg -q "patterns"; then
+    pass "preview wide (200): 'patterns' visible — 48-char right context fits in CONTEXT_CHARS=80"
+else
+    fail "preview wide (200): 'patterns' not visible (got: $plain_wide)"
+fi
+
+if echo "$plain_narrow" | rg -q "since"; then
+    pass "preview narrow (80): 'since' visible — within 20-char right context"
+else
+    fail "preview narrow (80): 'since' not visible (got: $plain_narrow)"
+fi
+if ! echo "$plain_narrow" | rg -q "patterns"; then
+    pass "preview narrow (80): 'patterns' not visible — beyond 20-char right context"
+else
+    fail "preview narrow (80): 'patterns' should not appear (got: $plain_narrow)"
+fi
+
+# FZF_PREVIEW_COLUMNS=35: available text (35-21=14) < query(18) → CONTEXT_CHARS=0 → query only
+if echo "$plain_tiny" | rg -q "timing-conventions"; then
+    pass "preview tiny (35, available space < query): full query shown"
+else
+    fail "preview tiny (35): query term missing (got: $plain_tiny)"
+fi
+if ! echo "$plain_tiny" | rg -q "skill"; then
+    pass "preview tiny (35): no context shown — 'skill' not present"
+else
+    fail "preview tiny (35): 'skill' should not appear with CONTEXT_CHARS=0 (got: $plain_tiny)"
+fi
+
 summary
