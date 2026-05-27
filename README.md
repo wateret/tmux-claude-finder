@@ -1,6 +1,6 @@
 # tmux-claude-finder
 
-Search across live interactive Claude Code sessions in tmux and jump to the matching pane.
+Search across live interactive Claude Code sessions in tmux and jump to the matching pane - Custom "Agent View" for foreground sessions.
 
 ![screenshot](screenshot.png)
 
